@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>バティック蝋防染・布柄レイアウトプレビュアー</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-amber-950 text-amber-100 min-h-screen">
+<div class="max-w-4xl mx-auto p-4">
+  <h1 class="text-2xl font-bold text-center text-amber-300 mb-1">🎨 バティック 蝋防染プレビュアー</h1>
+  <p class="text-center text-amber-700 mb-4 text-sm">ジャワ・バリスタイルの伝統柄をリアルタイムプレビュー</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <!-- Tools -->
+    <div class="bg-amber-900/40 rounded-xl p-3 space-y-3">
+      <!-- Pattern library -->
+      <div>
+        <div class="text-xs text-amber-400 mb-1">模様ライブラリ</div>
+        <div class="grid grid-cols-2 gap-1" id="pattern-lib"></div>
+      </div>
+
+      <!-- Dye color -->
+      <div>
+        <div class="text-xs text-amber-400 mb-1">染め色（布地色）</div>
+        <div class="flex flex-wrap gap-1">
+          <button onclick="setFabricColor('#1a237e')" style="background:#1a237e" class="w-7 h-7 rounded border border-amber-700" aria-label="インディゴ"></button>
+          <button onclick="setFabricColor('#b71c1c')" style="background:#b71c1c" class="w-7 h-7 rounded border border-amber-700" aria-label="赤"></button>
+          <button onclick="setFabricColor('#1b5e20')" style="background:#1b5e20" class="w-7 h-7 rounded border border-amber-700" aria-label="緑"></button>
+          <button onclick="setFabricColor('#4a148c')" style="background:#4a148c" class="w-7 h-7 rounded border border-amber-700" aria-label="紫"></button>
+          <button onclick="setFabricColor('#e65100')" style="background:#e65100" class="w-7 h-7 rounded border border-amber-700" aria-label="オレンジ"></button>
+          <button onclick="setFabricColor('#212121')" style="background:#212121" class="w-7 h-7 rounded border border-amber-700" aria-label="黒"></button>
+        </div>
+      </div>
+
+      <!-- Wax color -->
+      <div>
+        <div class="text-xs text-amber-400 mb-1">蝋（白抜き）の色調</div>
+        <div class="flex gap-1">
+          <button onclick="setWaxColor('#f5f5dc')" style="background:#f5f5dc;width:28px;height:28px" class="rounded border border-amber-700" aria-label="白"></button>
+          <button onclick="setWaxColor('#fef9c3')" style="background:#fef9c3;width:28px;height:28px" class="rounded border border-amber-700" aria-label="クリーム"></button>
+          <button onclick="setWaxColor('#d4a76a')" style="background:#d4a76a;width:28px;height:28px" class="rounded border border-amber-700" aria-label="ゴールド"></button>
+        </div>
+      </div>
+
+      <!-- Tools -->
+      <div>
+        <div class="text-xs text-amber-400 mb-1">ブラシサイズ</div>
+        <input type="range" id="brush-size" min="5" max="40" value="15" class="w-full accent-amber-500" aria-label="ブラシサイズ">
+      </div>
+      <div>
+        <div class="text-xs text-amber-400 mb-1">モード</div>
+        <div class="flex gap-1">
+          <button onclick="setMode('wax')" id="mode-wax" class="flex-1 py-1 rounded text-xs bg-amber-700 text-white" aria-label="蝋を置く">蝋置き</button>
+          <button onclick="setMode('erase')" id="mode-erase" class="flex-1 py-1 rounded text-xs bg-amber-900 text-amber-400" aria-label="蝋を消す">消去</button>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="space-y-1">
+        <button onclick="clearCanvas()" class="w-full py-1.5 bg-red-900/50 hover:bg-red-900 text-red-300 text-xs rounded" aria-label="クリア">🗑️ クリア</button>
+        <button onclick="downloadImg()" class="w-full py-1.5 bg-amber-700 hover:bg-amber-600 text-amber-100 text-xs rounded" aria-label="ダウンロード">💾 PNG保存</button>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="md:col-span-3">
+      <canvas id="batik-canvas" width="560" height="400" class="w-full rounded-xl cursor-crosshair border border-amber-800"></canvas>
+      <div class="text-xs text-amber-700 mt-1 text-center">クリック/ドラッグで蝋を置く。模様ライブラリからスタンプも使えます。</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const patterns = [
+  { name:'雲紋', emoji:'☁️', draw: (ctx,x,y,s) => {
+    ctx.beginPath();
+    ctx.arc(x,y,s,0,2*Math.PI);
+    ctx.arc(x+s*0.8,y,s*0.7,0,2*Math.PI);
+    ctx.arc(x-s*0.8,y,s*0.7,0,2*Math.PI);
+    ctx.fill();
+  }},
+  { name:'菱形', emoji:'◇', draw: (ctx,x,y,s) => {
+    ctx.beginPath();
+    ctx.moveTo(x,y-s); ctx.lineTo(x+s,y); ctx.lineTo(x,y+s); ctx.lineTo(x-s,y);
+    ctx.closePath(); ctx.fill();
+  }},
+  { name:'渦巻き', emoji:'🌀', draw: (ctx,x,y,s) => {
+    ctx.beginPath();
+    for(let a=0;a<6*Math.PI;a+=0.1) {
+      const r = a*s/(6*Math.PI);
+      if(a===0) ctx.moveTo(x+r*Math.cos(a), y+r*Math.sin(a));
+      else ctx.lineTo(x+r*Math.cos(a), y+r*Math.sin(a));
+    }
+    ctx.lineWidth=3; ctx.stroke();
+  }},
+  { name:'花びら', emoji:'🌸', draw: (ctx,x,y,s) => {
+    for(let i=0;i<6;i++) {
+      const a = i*Math.PI/3;
+      ctx.beginPath();
+      ctx.ellipse(x+s*0.6*Math.cos(a), y+s*0.6*Math.sin(a), s*0.4, s*0.2, a, 0, 2*Math.PI);
+      ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(x,y,s*0.25,0,2*Math.PI); ctx.fill();
+  }},
+  { name:'格子', emoji:'#', draw: (ctx,x,y,s) => {
+    const h = s*1.5;
+    for(let r=-h;r<=h;r+=s*0.5) {
+      ctx.fillRect(x-h, y+r-2, h*2, 4);
+      ctx.fillRect(x+r-2, y-h, 4, h*2);
+    }
+  }},
+  { name:'三角', emoji:'△', draw: (ctx,x,y,s) => {
+    ctx.beginPath();
+    ctx.moveTo(x,y-s); ctx.lineTo(x+s,y+s); ctx.lineTo(x-s,y+s);
+    ctx.closePath(); ctx.fill();
+  }},
+  { name:'星', emoji:'⭐', draw: (ctx,x,y,s) => {
+    ctx.beginPath();
+    for(let i=0;i<10;i++) {
+      const r = i%2===0?s:s*0.4;
+      const a = i*Math.PI/5 - Math.PI/2;
+      if(i===0) ctx.moveTo(x+r*Math.cos(a),y+r*Math.sin(a));
+      else ctx.lineTo(x+r*Math.cos(a),y+r*Math.sin(a));
+    }
+    ctx.closePath(); ctx.fill();
+  }},
+  { name:'ドット', emoji:'·', draw: (ctx,x,y,s) => {
+    for(let dx=-s;dx<=s;dx+=s*0.6) {
+      for(let dy=-s;dy<=s;dy+=s*0.6) {
+        ctx.beginPath(); ctx.arc(x+dx,y+dy,s*0.15,0,2*Math.PI); ctx.fill();
+      }
+    }
+  }},
+];
+
+const canvas = document.getElementById('batik-canvas');
+const ctx = canvas.getContext('2d');
+let fabricColor = '#1a237e';
+let waxColor = '#f5f5dc';
+let mode = 'wax';
+let drawing = false;
+let selectedPattern = null;
+
+function initCanvas() {
+  ctx.fillStyle = fabricColor;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  // Add fabric texture
+  ctx.globalAlpha = 0.05;
+  for(let i=0;i<canvas.width;i+=4) {
+    for(let j=0;j<canvas.height;j+=4) {
+      if(Math.random()>0.5) { ctx.fillStyle='#ffffff'; ctx.fillRect(i,j,2,2); }
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function setFabricColor(c) { fabricColor = c; initCanvas(); }
+function setWaxColor(c) { waxColor = c; }
+function setMode(m) {
+  mode = m;
+  ['wax','erase'].forEach(id => {
+    const btn = document.getElementById('mode-' + id);
+    btn.className = `flex-1 py-1 rounded text-xs ${id===m?'bg-amber-700 text-white':'bg-amber-900 text-amber-400'}`;
+  });
+}
+
+function placeWax(x, y) {
+  const size = parseInt(document.getElementById('brush-size').value);
+  if (mode === 'erase') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0,0,0,1)';
+    ctx.beginPath(); ctx.arc(x,y,size,0,2*Math.PI); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    // Redraw fabric under erased area
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width=canvas.width; tempCanvas.height=canvas.height;
+    const tctx = tempCanvas.getContext('2d');
+    tctx.fillStyle = fabricColor; tctx.fillRect(0,0,tempCanvas.width,tempCanvas.height);
+    // Copy fabric back
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.drawImage(tempCanvas,0,0);
+    ctx.globalCompositeOperation = 'source-over';
+    return;
+  }
+  if (selectedPattern) {
+    ctx.fillStyle = waxColor;
+    ctx.strokeStyle = waxColor;
+    selectedPattern.draw(ctx, x, y, size);
+  } else {
+    ctx.fillStyle = waxColor;
+    ctx.beginPath(); ctx.arc(x,y,size,0,2*Math.PI); ctx.fill();
+  }
+}
+
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width/rect.width;
+  const scaleY = canvas.height/rect.height;
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x:(clientX-rect.left)*scaleX, y:(clientY-rect.top)*scaleY };
+}
+
+canvas.addEventListener('mousedown', e => { drawing=true; const p=getCanvasPos(e); placeWax(p.x,p.y); });
+canvas.addEventListener('mousemove', e => { if(!drawing) return; const p=getCanvasPos(e); placeWax(p.x,p.y); });
+canvas.addEventListener('mouseup', () => drawing=false);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing=true; const p=getCanvasPos(e); placeWax(p.x,p.y); });
+canvas.addEventListener('touchmove', e => { e.preventDefault(); if(!drawing) return; const p=getCanvasPos(e); placeWax(p.x,p.y); });
+canvas.addEventListener('touchend', () => drawing=false);
+
+function renderPatternLib() {
+  const el = document.getElementById('pattern-lib');
+  el.innerHTML = patterns.map((p,i) => `
+    <button onclick="selectPattern(${i})" id="pat-${i}" class="bg-amber-900/50 hover:bg-amber-800 text-amber-200 py-1 rounded text-xs" aria-label="${p.name}">${p.emoji} ${p.name}</button>
+  `).join('');
+}
+
+function selectPattern(i) {
+  selectedPattern = patterns[i];
+  patterns.forEach((_,idx) => {
+    const btn = document.getElementById('pat-' + idx);
+    if (btn) btn.className = `${idx===i?'bg-amber-700':'bg-amber-900/50'} hover:bg-amber-800 text-amber-200 py-1 rounded text-xs`;
+  });
+}
+
+function clearCanvas() {
+  ctx.fillStyle = fabricColor;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+function downloadImg() {
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = 'batik-pattern.png';
+  a.click();
+}
+
+initCanvas();
+renderPatternLib();
+</script>
+</body>
+</html>
